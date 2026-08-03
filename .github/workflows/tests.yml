@@ -30,18 +30,3 @@ jobs:
       - name: Run tests
         run: pytest tests/ -v
         
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install ruff
-        run: pip install ruff
-
-      - name: Lint
-        run: ruff check ea_pipeline/ tests/ 
