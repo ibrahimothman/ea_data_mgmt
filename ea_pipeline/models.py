@@ -7,7 +7,6 @@ stage failed before it could fill them.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from datetime import datetime, timezone
 
 from ea_pipeline.states import UploadStatus
@@ -121,6 +120,7 @@ class BronzeOutcome:
         # Only stamp the completion time on an actual success — otherwise
         # "bronze_processed_at IS NOT NULL" would be a lie.
         if self.succeeded:
-            values["bronze_processed_at"] = datetime.now(timezone.utc)
+            # WARNING: timezone.UTC is python 3.11+
+            values["bronze_processed_at"] = datetime.now(timezone.UTC)
 
         return values
