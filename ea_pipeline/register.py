@@ -19,6 +19,7 @@ from pyspark.sql.types import (
 
 from ea_pipeline.config import DATASET_DIRECTORIES, MANIFEST_TABLE, spark
 from ea_pipeline.files import calculate_file_hash
+from ea_pipeline.states import UploadStatus
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ def register_uploaded_file(
     )
 
     duplicate_of_upload_id = duplicate_of["upload_id"] if duplicate_of else None
-    status = "DUPLICATE" if duplicate_of_upload_id else "RECEIVED"
+    status = UploadStatus.DUPLICATE if duplicate_of_upload_id else UploadStatus.RECEIVED
 
     # 9. Build the manifest row
     upload_id = str(uuid.uuid4())
