@@ -71,7 +71,7 @@ def test_tab_delimiter_is_detected(write_csv):
 
 def test_non_utf8_file(write_csv):
     """Older Excel exports cp1252, which must not surface as FAILED."""
-    content = "project_id,project_name\nP001,Cafe\u0301\n"
+    content = "project_id,project_name\nP001,Café\n"
 
     with pytest.raises(ContractViolation, match="not valid UTF-8"):
         read_csv_structure(write_csv(content, encoding="cp1252"))
