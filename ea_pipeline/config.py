@@ -56,7 +56,7 @@ BRONZE_TABLES = {
     "applications": "ea_dev.bronze.applications",
 }
 
-STALE_CLAIM_MINUTES = 1
+STALE_CLAIM_MINUTES = 30
 MAX_MESSAGE_LENGTH = 1000
 MAX_CORRUPT_ROW_RATIO = 0.05
 CORRUPT_RECORD_COLUMN = "_corrupt_record"
