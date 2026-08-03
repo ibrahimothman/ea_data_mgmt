@@ -120,7 +120,6 @@ class BronzeOutcome:
         # Only stamp the completion time on an actual success — otherwise
         # "bronze_processed_at IS NOT NULL" would be a lie.
         if self.succeeded:
-            # WARNING: timezone.UTC is python 3.11+
-            values["bronze_processed_at"] = datetime.now(timezone.UTC)
+            values["bronze_processed_at"] = datetime.now(timezone.utc)
 
         return values
