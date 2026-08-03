@@ -7,7 +7,7 @@ name and the claim pattern exist in one place.
 from delta.tables import DeltaTable
 from pyspark.sql import functions as F
 
-from ea_pipeline.config import MANIFEST_TABLE, STALE_CLAIM_MINUTES, spark
+from ea_pipeline.config import MANIFEST_TABLE, STALE_CLAIM_MINUTES, spark, MAX_MESSAGE_LENGTH
 from ea_pipeline.states import UploadStatus
 
 
@@ -45,6 +45,21 @@ def get_status(upload_id: str) -> str | None:
     return record["status"] if record else None
 
 
+def _truncate(message: str) -> str:
+    """Cap a message so a large stack trace cannot land in the manifest."""
+    if len(message) <= MAX_MESSAGE_LENGTH:
+        return message
+    return message[: MAX_MESSAGE_LENGTH - 3] + "..."
+
+
+def _to_column(value):
+    """Wrap a Python value as a Spark column expression."""
+    if isinstance(value, list):
+        return F.array(*[F.lit(v) for v in value]).cast("array<string>")
+    if isinstance(value, str):
+        return F.lit(_truncate(value))     # the table caps its own strings
+    return F.lit(value)
+
 def update_manifest(upload_id: str, values: dict) -> None:
     """
     Update one manifest row.
@@ -55,11 +70,12 @@ def update_manifest(upload_id: str, values: dict) -> None:
 
     updated_at is set here so it can never be forgotten at a call site.
     """
-    values = {**values, "updated_at": F.current_timestamp()}
+    columns = {key: _to_column(value) for key, value in values.items()}
+    columns["updated_at"] = F.current_timestamp()
 
     DeltaTable.forName(spark, MANIFEST_TABLE).update(
         condition=F.col("upload_id") == upload_id,
-        set=values,
+        set=columns,
     )
 
 

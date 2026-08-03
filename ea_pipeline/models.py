@@ -8,29 +8,9 @@ stage failed before it could fill them.
 
 from dataclasses import dataclass, field
 from enum import Enum
+from datetime import datetime, timezone
 
-from pyspark.sql import functions as F
-
-from ea_pipeline.config import MAX_MESSAGE_LENGTH
 from ea_pipeline.states import UploadStatus
-
-
-def truncate(message: str) -> str:
-    """Cap a message so a large stack trace cannot land in the manifest."""
-    if len(message) <= MAX_MESSAGE_LENGTH:
-        return message
-    return message[: MAX_MESSAGE_LENGTH - 3] + "..."
-
-
-def string_array(values: list[str]):
-    """
-    Build a Spark array<string> column from a Python list.
-
-    The explicit cast matters for the empty case: array() with no
-    elements has an ambiguous element type, and the empty case is the
-    one taken on every successful validation.
-    """
-    return F.array(*[F.lit(value) for value in values]).cast("array<string>")
 
 
 @dataclass(frozen=True)
@@ -78,7 +58,7 @@ class ValidationOutcome:
         return cls(
             upload_id=upload_id,
             dataset_name=dataset_name,
-            status="REJECTED",
+            status=UploadStatus.REJECTED,
             validation_message=message,
             column_check=column_check or ColumnCheckResult(is_valid=False),
             source_row_count=source_row_count,
@@ -87,12 +67,12 @@ class ValidationOutcome:
     def as_manifest_update(self) -> dict:
         """The columns this outcome writes to the manifest."""
         return {
-            "status": F.lit(self.status),
-            "validation_message": F.lit(truncate(self.validation_message)),
-            "source_row_count": F.lit(self.source_row_count),
-            "missing_columns": string_array(self.column_check.missing_columns),
-            "unexpected_columns": string_array(self.column_check.unexpected_columns),
-            "duplicate_columns": string_array(self.column_check.duplicate_columns),
+            "status": self.status,
+            "validation_message": self.validation_message,
+            "source_row_count": self.source_row_count,
+            "missing_columns": self.column_check.missing_columns,
+            "unexpected_columns": self.column_check.unexpected_columns,
+            "duplicate_columns": self.column_check.duplicate_columns,
         }
 
 
@@ -125,22 +105,22 @@ class BronzeOutcome:
             upload_id=upload_id,
             dataset_name=dataset_name,
             bronze_table=bronze_table,
-            status="BRONZE_REJECTED",
+            status=UploadStatus.BRONZE_REJECTED,
             message=message,
         )
 
     def as_manifest_update(self) -> dict:
         """The columns this outcome writes to the manifest."""
         values = {
-            "status": F.lit(self.status),
-            "validation_message": F.lit(truncate(self.message)),
-            "bronze_row_count": F.lit(self.row_count),
-            "bronze_corrupt_row_count": F.lit(self.corrupt_row_count),
+            "status": self.status,
+            "validation_message": self.message,
+            "bronze_row_count": self.row_count,
+            "bronze_corrupt_row_count": self.corrupt_row_count
         }
 
         # Only stamp the completion time on an actual success — otherwise
         # "bronze_processed_at IS NOT NULL" would be a lie.
         if self.succeeded:
-            values["bronze_processed_at"] = F.current_timestamp()
+            values["bronze_processed_at"] = datetime.now(timezone.utc)
 
         return values

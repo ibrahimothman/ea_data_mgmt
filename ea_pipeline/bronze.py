@@ -17,7 +17,7 @@ from ea_pipeline.config import (
 from ea_pipeline.errors import BronzeIngestionError
 from ea_pipeline.files import calculate_file_hash, normalise_column_name
 from ea_pipeline.manifest import claim_upload, load_manifest_record, update_manifest
-from ea_pipeline.models import BronzeOutcome, truncate
+from ea_pipeline.models import BronzeOutcome
 from ea_pipeline.states import CLAIMABLE_FOR_BRONZE, UploadStatus
 
 logger = logging.getLogger(__name__)
@@ -267,7 +267,7 @@ def load_upload_to_bronze(upload_id: str, verbose: bool = True) -> BronzeOutcome
 
         update_manifest(upload_id, {
             "status": F.lit(UploadStatus.BRONZE_FAILED.value),
-            "validation_message": F.lit(truncate(f"Bronze load failed: {error}")),
+            "validation_message": F.lit(f"Bronze load failed: {error}"),
         })
         raise
 

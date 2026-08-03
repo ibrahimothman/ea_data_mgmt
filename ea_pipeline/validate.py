@@ -14,7 +14,7 @@ from ea_pipeline.config import DATASET_CONTRACTS
 from ea_pipeline.errors import ContractViolation
 from ea_pipeline.files import calculate_file_hash, read_csv_structure
 from ea_pipeline.manifest import claim_upload, load_manifest_record, update_manifest
-from ea_pipeline.models import ColumnCheckResult, ValidationOutcome, truncate
+from ea_pipeline.models import ColumnCheckResult, ValidationOutcome
 from ea_pipeline.states import CLAIMABLE_FOR_VALIDATION, UploadStatus
 
 logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ def validate_registered_upload(
         update_manifest(upload_id, {
             "status": F.lit(UploadStatus.FAILED),
             "validation_message": F.lit(
-                truncate(f"Contract validation failed: {error}")
+                f"Contract validation failed: {error}"
             ),
         })
         raise
