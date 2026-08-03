@@ -10,12 +10,13 @@ import logging
 import os
 
 from pyspark.sql import functions as F
+from pyspark.sql.types import StringType, StructField, StructType
 
 from ea_pipeline.config import (
     BRONZE_TABLES, CORRUPT_RECORD_COLUMN, MAX_CORRUPT_ROW_RATIO, spark,
 )
 from ea_pipeline.errors import BronzeIngestionError
-from ea_pipeline.files import calculate_file_hash, normalise_column_name
+from ea_pipeline.files import calculate_file_hash ,read_csv_structure
 from ea_pipeline.manifest import claim_upload, load_manifest_record, update_manifest
 from ea_pipeline.models import BronzeOutcome
 from ea_pipeline.states import CLAIMABLE_FOR_BRONZE, UploadStatus
@@ -43,7 +44,21 @@ def _verify_file_unchanged(file_path: str, registered_hash: str) -> None:
         )
 
 
-def _read_source_csv(file_path: str):
+def _build_read_schema(header: list[str]) -> StructType:
+    """
+    Build an all-string read schema from the validated header.
+
+    Without an explicit schema Spark has nothing to check a row against,
+    so _corrupt_record is never populated and malformed rows pass
+    silently. Every field stays StringType — the schema fixes the column
+    count, it does not impose types.
+    """
+    fields = [StructField(name, StringType(), True) for name in header]
+    fields.append(StructField(CORRUPT_RECORD_COLUMN, StringType(), True))
+    return StructType(fields)
+
+
+def _read_source_csv(file_path: str, schema: StructType):
     """
     Read the CSV as raw text, one column per source column.
 
@@ -56,8 +71,8 @@ def _read_source_csv(file_path: str):
     """
     return (
         spark.read
+        .schema(schema)
         .option("header", "true")
-        .option("inferSchema", "false")
         .option("mode", "PERMISSIVE")
         .option("columnNameOfCorruptRecord", CORRUPT_RECORD_COLUMN)
         .option("multiLine", "true")
@@ -66,56 +81,25 @@ def _read_source_csv(file_path: str):
     )
 
 
-def _prepare_dataframe(df, upload_id: str, source_file_name: str):
+def _attach_lineage(df, upload_id: str, source_file_name: str):
     """
-    Normalise column names and attach lineage.
-
-    Returns:
-        (dataframe, original_columns)
+    Attach lineage columns.
     """
-    # ONE Analyze call. Under Spark Connect this is a network round trip,
-    # so it is read once into a plain list and reused.
-    original_columns = df.columns
-
-    # Rebuild every column in a single select rather than chaining
-    # renames — one plan node instead of one per column.
-    renamed = []
-
-    for original in original_columns:
-        if original == CORRUPT_RECORD_COLUMN:
-            renamed.append(F.col(f"`{original}`"))   # Spark's name, leave it
-        else:
-            renamed.append(
-                F.col(f"`{original}`").alias(normalise_column_name(original))
-            )
-
-    df = df.select(renamed)
-
-    # current_timestamp() is evaluated once per query, so every row in
-    # one load shares the same ingested_at.
-    df = df.withColumns({
+    return df.withColumns({
         "upload_id": F.lit(upload_id),
         "source_file_name": F.lit(source_file_name),
         "ingested_at": F.current_timestamp(),
     })
 
-    return df, original_columns
 
-
-def _count_rows(df, original_columns: list[str]) -> tuple[int, int]:
+def _count_rows(df) -> tuple[int, int]:
     """
     Count total rows and unparseable rows in a single action.
 
-    _corrupt_record is only populated as a side effect of parsing, so a
-    query touching only that column can have the parse optimised away.
-    One agg over all rows forces the parse and avoids the problem.
-
-    Spark only adds the column when it actually hits a bad row, so its
-    presence is checked rather than assumed.
+    _corrupt_record is declared in the read schema, so it is always
+    present. One agg over all rows forces the parse, which is what
+    populates it.
     """
-    if CORRUPT_RECORD_COLUMN not in original_columns:
-        return df.count(), 0
-
     counts = df.agg(
         F.count("*").alias("total"),
         F.count(F.col(CORRUPT_RECORD_COLUMN)).alias("corrupt"),   # non-null only
@@ -235,10 +219,14 @@ def load_upload_to_bronze(upload_id: str, verbose: bool = True) -> BronzeOutcome
     try:
         _verify_file_unchanged(file_path, registered_hash)
 
-        df = _read_source_csv(file_path)
-        df, original_columns = _prepare_dataframe(df, upload_id, file_name)
+        # Re-read the header to build the schema.
+        structure = read_csv_structure(file_path)
+        schema = _build_read_schema(structure.header)
 
-        row_count, corrupt_row_count = _count_rows(df, original_columns)
+        df = _read_source_csv(file_path, schema)
+        df = _attach_lineage(df, upload_id, file_name)
+
+        row_count, corrupt_row_count = _count_rows(df)
         _check_corrupt_ratio(row_count, corrupt_row_count)
 
         _clear_previous_load(bronze_table, upload_id)
