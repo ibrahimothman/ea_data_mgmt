@@ -1,0 +1,3 @@
+pytest>=8.0
+pyspark>=3.5
+delta-spark>=3.1
