@@ -60,3 +60,10 @@ STALE_CLAIM_MINUTES = 30
 MAX_MESSAGE_LENGTH = 1000
 MAX_CORRUPT_ROW_RATIO = 0.05
 CORRUPT_RECORD_COLUMN = "_corrupt_record"
+
+# A file still being written is visible on disk but incomplete. Hashing
+# it would record a truncated file, and the next stage would then see a
+# hash mismatch and report the file as "changed" — which is technically
+# true but completely misleading. Recently-touched files wait for the
+# next run instead.
+MIN_FILE_AGE_SECONDS = 60
