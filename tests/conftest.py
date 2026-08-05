@@ -13,15 +13,21 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from ea_pipeline.config import DatasetContract  # noqa: E402
+from ea_pipeline.config import DatasetContract, ColumnSpec  # noqa: E402
 
 
 @pytest.fixture
 def strict_contract():
     """A contract that rejects unexpected columns."""
     return DatasetContract(
-        required=frozenset({"project_id", "project_name", "project_status"}),
-        optional=frozenset({"start_date", "end_date"}),
+        key_column="project_id",
+        columns=(
+            ColumnSpec("project_id", "string", required=True),
+            ColumnSpec("project_name", "string", required=True),
+            ColumnSpec("project_status", "string", required=True),
+            ColumnSpec("start_date", "date", required=False),
+            ColumnSpec("end_date", "date", required=False),
+        ),
         reject_unexpected=True,
     )
 
@@ -30,8 +36,14 @@ def strict_contract():
 def lenient_contract():
     """A contract that allows unexpected columns - matches production."""
     return DatasetContract(
-        required=frozenset({"project_id", "project_name", "project_status"}),
-        optional=frozenset({"start_date", "end_date"}),
+        key_column="project_id",
+        columns=(
+            ColumnSpec("project_id", "string", required=True),
+            ColumnSpec("project_name", "string", required=True),
+            ColumnSpec("project_status", "string", required=True),
+            ColumnSpec("start_date", "date", required=False),
+            ColumnSpec("end_date", "date", required=False),
+        ),
         reject_unexpected=False,
     )
 
