@@ -13,9 +13,8 @@ import logging
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from ea_pipeline.config import (
-    BRONZE_TABLES, DATASET_CONTRACTS, SILVER_TABLES, spark,
-)
+from ea_pipeline.config import spark
+from ea_pipeline.schema_loader import BRONZE_TABLES, DATASET_CONTRACTS, SILVER_TABLES, DATETIME_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,9 @@ def _cast_expressions(contract) -> list:
             continue
 
         if spec.data_type == "date":
-            cast = F.try_to_date(F.trim(raw), DATE_FORMAT)
+            cast = F.try_to_date(F.trim(raw), F.lit(DATE_FORMAT))
+        elif spec.data_type == "timestamp":
+            cast = F.try_to_timestamp(F.trim(raw), F.lit(DATETIME_FORMAT))
         else:
             cast = F.trim(raw).cast(spec.data_type)
 

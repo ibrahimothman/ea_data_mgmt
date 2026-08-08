@@ -12,7 +12,8 @@ import time
 from pyspark.sql import functions as F
 
 from ea_pipeline.bronze import load_upload_to_bronze
-from ea_pipeline.config import DATASET_DIRECTORIES, MANIFEST_TABLE, spark, MIN_FILE_AGE_SECONDS, STALE_CLAIM_MINUTES
+from ea_pipeline.config import spark, MIN_FILE_AGE_SECONDS, STALE_CLAIM_MINUTES
+from ea_pipeline.schema_loader import DATASET_DIRECTORIES, MANIFEST_TABLE
 from ea_pipeline.register import register_uploaded_file
 from ea_pipeline.states import CLAIMABLE_FOR_BRONZE, CLAIMABLE_FOR_VALIDATION, UploadStatus
 from ea_pipeline.validate import validate_registered_upload

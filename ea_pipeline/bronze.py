@@ -12,9 +12,8 @@ import os
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
 
-from ea_pipeline.config import (
-    BRONZE_TABLES, CORRUPT_RECORD_COLUMN, MAX_CORRUPT_ROW_RATIO, spark,
-)
+from ea_pipeline.config import CORRUPT_RECORD_COLUMN, MAX_CORRUPT_ROW_RATIO, spark
+from ea_pipeline.schema_loader import BRONZE_TABLES
 from ea_pipeline.errors import BronzeIngestionError
 from ea_pipeline.files import calculate_file_hash ,read_csv_structure
 from ea_pipeline.manifest import claim_upload, load_manifest_record, update_manifest

@@ -17,7 +17,8 @@ from pyspark.sql.types import (
     ArrayType, LongType, StringType, StructField, StructType, TimestampType,
 )
 
-from ea_pipeline.config import DATASET_DIRECTORIES, MANIFEST_TABLE, spark
+from ea_pipeline.config import spark
+from ea_pipeline.schema_loader import DATASET_DIRECTORIES, MANIFEST_TABLE
 from ea_pipeline.files import calculate_file_hash
 from ea_pipeline.states import UploadStatus
 

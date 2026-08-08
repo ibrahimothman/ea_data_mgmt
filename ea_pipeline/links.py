@@ -1,116 +1,125 @@
-"""Build link tables between silver entities.
+"""Check foreign keys on the relationship datasets.
 
-Links are where referential integrity is checked. Silver transforms one
-dataset at a time and cannot know whether a code exists elsewhere, so an
-orphaned reference only becomes visible when the tables are joined.
+Silver types and deduplicates each dataset independently and cannot know
+whether a referenced id exists elsewhere. Referential integrity is
+therefore checked here, after all silver tables are built.
 
-Orphans are flagged, not dropped: a mapping pointing at a non-existent
-project is a data quality finding someone should fix, and silently
-removing it means nobody ever learns.
+Findings are recorded rather than acted on: a link pointing at a
+non-existent record is a data quality problem for someone to fix, and
+removing it would mean nobody ever learns.
 """
 
 import logging
 
 from pyspark.sql import functions as F
 
-from ea_pipeline.config import LINK_TABLES, SILVER_TABLES, spark
+from ea_pipeline.config import spark
+from ea_pipeline.schema_loader import SILVER_SCHEMA, SILVER_TABLES, LINK_FINDINGS_TABLE
 
 logger = logging.getLogger(__name__)
 
 
-def build_application_project_link() -> dict:
-    """
-    Build link_application_project from the owner-asserted mapping.
+# Every foreign key in the model: which link column must exist as which
+# key in which entity table. Derived from the schema's foreign_keys, but
+# stated here so the check is readable in one place.
+FOREIGN_KEYS = [
+    ("project_application",  "project_id",     "project_initiative", "project_id"),
+    ("project_application",  "application_id", "application",        "application_id"),
+    ("application_contract", "application_id", "application",        "application_id"),
+    ("application_contract", "contract_id",    "contract",           "contract_id"),
+    ("project_contract",     "project_id",     "project_initiative", "project_id"),
+    ("project_contract",     "contract_id",    "contract",           "contract_id"),
+]
 
-    Every mapping row is kept. link_status records whether both ends
-    resolve to a real record.
-    """
-    mapping = spark.table(SILVER_TABLES["application_project_map"])
-    applications = spark.table(SILVER_TABLES["applications"])
-    projects = spark.table(SILVER_TABLES["projects"])
+# Surrogate primary key of each link dataset, so a finding names the row.
+LINK_KEYS = {
+    "project_application":  "project_application_id",
+    "application_contract": "application_contract_id",
+    "project_contract":     "project_contract_id",
+}
 
-    # Left joins: keep every mapping row, whether or not it resolves.
-    # A null on the right means the code does not exist.
-    resolved = (
-        mapping.alias("m")
-        .join(
-            applications.select(
-                F.col("application_code").alias("_app_exists")
-            ).alias("a"),
-            F.col("m.application_code") == F.col("a._app_exists"),
-            "left",
-        )
-        .join(
-            projects.select(
-                F.col("project_code").alias("_prj_exists")
-            ).alias("p"),
-            F.col("m.project_code") == F.col("p._prj_exists"),
-            "left",
-        )
+
+def _find_orphans(
+    link_dataset: str,
+    fk_column: str,
+    target_dataset: str,
+    target_column: str,
+):
+    """
+    Rows in a link whose foreign key has no matching record.
+
+    A left anti join keeps only the rows that did NOT match, which is
+    exactly the set of broken references.
+    """
+    link = spark.table(SILVER_TABLES[link_dataset]).alias("l")
+    target = (
+        spark.table(SILVER_TABLES[target_dataset])
+        .select(F.col(target_column).alias("_target_key"))
+        .alias("t")
     )
 
-    linked = resolved.select(
-        F.col("m.application_code"),
-        F.col("m.project_code"),
-        F.col("m.asserted_by"),
-        F.col("m.asserted_at"),
-        F.col("m.notes"),
-
-        # Both ends must resolve for the link to be usable downstream.
-        F.when(
-            F.col("_app_exists").isNull() & F.col("_prj_exists").isNull(),
-            F.lit("ORPHAN_BOTH"),
-        ).when(
-            F.col("_app_exists").isNull(), F.lit("ORPHAN_APPLICATION")
-        ).when(
-            F.col("_prj_exists").isNull(), F.lit("ORPHAN_PROJECT")
-        ).otherwise(
-            F.lit("VALID")
-        ).alias("link_status"),
-
-        F.col("m.upload_id"),
-        F.current_timestamp().alias("link_built_at"),
+    orphans = link.join(
+        target,
+        F.col(f"l.{fk_column}") == F.col("t._target_key"),
+        "left_anti",
     )
+
+    return orphans.select(
+        F.lit(link_dataset).alias("link_dataset"),
+        F.col(LINK_KEYS[link_dataset]).alias("link_id"),
+        F.lit(fk_column).alias("fk_column"),
+        F.col(fk_column).alias("fk_value"),
+        F.lit(target_dataset).alias("target_dataset"),
+        F.lit(target_column).alias("target_column"),
+        F.col("upload_id"),
+    )
+
+
+def build_link_findings() -> dict:
+    """
+    Check every foreign key and write the findings.
+
+    Rebuilt in full each run, like silver — it is a pure function of the
+    silver tables.
+    """
+    findings = None
+
+    for link_dataset, fk_column, target_dataset, target_column in FOREIGN_KEYS:
+        orphans = _find_orphans(
+            link_dataset, fk_column, target_dataset, target_column
+        )
+        findings = orphans if findings is None else findings.union(orphans)
+
+    findings = findings.withColumn("checked_at", F.current_timestamp())
 
     (
-        linked.write
+        findings.write
         .mode("overwrite")
         .option("overwriteSchema", "true")
-        .saveAsTable(LINK_TABLES["application_project"])
+        .saveAsTable(LINK_FINDINGS_TABLE)
     )
 
-    # Counts by status, so orphans are visible without a separate query.
+    # Counts per link and column, so the summary is useful without a query.
     counts = {
-        row["link_status"]: row["n"]
-        for row in linked.groupBy("link_status").agg(
-            F.count("*").alias("n")
-        ).collect()
+        f"{row['link_dataset']}.{row['fk_column']}": row["n"]
+        for row in (
+            spark.table(LINK_FINDINGS_TABLE)
+            .groupBy("link_dataset", "fk_column")
+            .agg(F.count("*").alias("n"))
+            .collect()
+        )
     }
 
-    summary = {"table": LINK_TABLES["application_project"], **counts}
-    logger.info("Built link table: %s", summary)
+    total = spark.table(LINK_FINDINGS_TABLE).count()
+    summary = {"table": LINK_FINDINGS_TABLE, "total_findings": total, **counts}
 
+    logger.info("Link integrity: %s", summary)
     return summary
 
 
 def build_all_link_tables() -> list[dict]:
-    """
-    Build every link table.
-
-    Runs after silver, since links join silver tables. Each is
-    independent — a failure is recorded and the rest continue.
-    """
-    builders = {
-        "application_project": build_application_project_link,
-    }
-
-    summaries = []
-
-    for name, builder in builders.items():
-        try:
-            summaries.append(builder())
-        except Exception as error:
-            logger.exception("Link build failed for %s", name)
-            summaries.append({"link": name, "error": str(error)[:500]})
-
-    return summaries 
+    try:
+        return [build_link_findings()]
+    except Exception as error:
+        logger.exception("Link check failed")
+        return [{"link": "link_integrity", "error": str(error)[:500]}]

@@ -7,7 +7,8 @@ name and the claim pattern exist in one place.
 from delta.tables import DeltaTable
 from pyspark.sql import functions as F
 
-from ea_pipeline.config import MANIFEST_TABLE, STALE_CLAIM_MINUTES, spark, MAX_MESSAGE_LENGTH
+from ea_pipeline.config import STALE_CLAIM_MINUTES, spark, MAX_MESSAGE_LENGTH
+from ea_pipeline.schema_loader import MANIFEST_TABLE
 from ea_pipeline.states import UploadStatus
 
 
