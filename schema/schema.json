@@ -1,0 +1,2088 @@
+{
+  "schema_name": "bank_application_portfolio_core",
+  "schema_version": "1.1.0",
+  "description": "Metadata definition for a bank application portfolio covering the three core entities Application, Project / Initiative, and Contract, together with the direct many-to-many relationships between them.",
+  "scope": [
+    "Application",
+    "Project / Initiative",
+    "Contract",
+    "Project-to-Application relationships",
+    "Application-to-Contract relationships",
+    "Project-to-Contract relationships"
+  ],
+  "conventions": {
+    "naming": "snake_case for physical names; uppercase codes for enum values",
+    "dates": "ISO 8601 calendar date: YYYY-MM-DD",
+    "datetimes": "ISO 8601 UTC datetime: YYYY-MM-DDTHH:MM:SSZ",
+    "currency_codes": "ISO 4217 three-letter code",
+    "identifiers": "Stable, non-reusable business identifiers with entity-specific prefixes",
+    "deletion_policy": "Referenced records should not be physically deleted. Use lifecycle or record status values and preserve relationship history."
+  },
+  "quality_dimensions": [
+    "completeness",
+    "validity",
+    "uniqueness",
+    "consistency",
+    "referential_integrity",
+    "timeliness",
+    "accuracy"
+  ],
+  "physical": {
+    "catalog": "ea_dev",
+    "landing_volume": "/Volumes/ea_dev/landing/uploads",
+    "bronze_schema": "ea_dev.bronze",
+    "silver_schema": "ea_dev.silver",
+    "gold_schema": "ea_dev.gold",
+    "operations_schema": "ea_dev.operations",
+    "manifest_table": "ea_dev.operations.upload_manifest",
+    "link_findings_table": "ea_dev.silver.link_integrity_findings",
+    "date_format": "dd/MM/yyyy",
+    "datetime_format": "yyyy-MM-dd'T'HH:mm:ss'Z'",
+    "type_mapping": {
+      "string": "string",
+      "enum": "string",
+      "boolean": "boolean",
+      "integer": "int",
+      "date": "date",
+      "datetime": "timestamp",
+      "decimal(18,2)": "decimal(18,2)",
+      "decimal(5,2)": "decimal(5,2)"
+    },
+    "system_managed_columns": [
+      "created_at",
+      "updated_at",
+      "source_system"
+    ],
+    "reject_unexpected": false,
+    "table_properties": {
+      "delta.autoOptimize.optimizeWrite": "true",
+      "delta.columnMapping.mode": "name"
+    }
+  },
+  "tables": [
+    {
+      "name": "application",
+      "display_name": "Application",
+      "table_type": "entity",
+      "description": "Represents a software application, platform, or externally consumed application service managed as part of the bank's application portfolio.",
+      "primary_key": [
+        "application_id"
+      ],
+      "alternate_keys": [
+        [
+          "application_name"
+        ]
+      ],
+      "attributes": [
+        {
+          "name": "application_id",
+          "description": "Stable unique identifier for the application.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "APP-000123",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^APP-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "application_name",
+          "description": "Official business-recognized name of the application.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 200,
+          "example": "Retail Loan Origination System",
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank or contain only whitespace.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique after trimming whitespace and ignoring case.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "description": "Concise explanation of the application's purpose and major business use.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "max_length": 2000,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Recommended for all ACTIVE and RETIRING applications.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "application_type",
+          "description": "Portfolio classification of the application.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "BUSINESS_APPLICATION",
+            "TECHNOLOGY_PLATFORM",
+            "INTEGRATION_PLATFORM",
+            "DATA_PLATFORM",
+            "SAAS_APPLICATION",
+            "MOBILE_APPLICATION",
+            "CUSTOM_DEVELOPED_APPLICATION",
+            "VENDOR_PACKAGE",
+            "OTHER"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "lifecycle_status",
+          "description": "Current lifecycle state of the application.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PROPOSED",
+            "PLANNED",
+            "IN_DEVELOPMENT",
+            "ACTIVE",
+            "RESTRICTED",
+            "RETIRING",
+            "RETIRED",
+            "DECOMMISSIONED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "ACTIVE requires production_date.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "RETIRED or DECOMMISSIONED requires actual_retirement_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "business_criticality",
+          "description": "Business impact classification used for prioritization and resilience decisions.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "CRITICAL",
+            "HIGH",
+            "MEDIUM",
+            "LOW"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "deployment_model",
+          "description": "Primary deployment or consumption model of the application.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "ON_PREMISES",
+            "PRIVATE_CLOUD",
+            "PUBLIC_CLOUD",
+            "HYBRID_CLOUD",
+            "SAAS",
+            "MANAGED_SERVICE",
+            "OUTSOURCED_HOSTING",
+            "OTHER"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "production_date",
+          "description": "Date on which the application first entered production service.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when lifecycle_status is ACTIVE, RESTRICTED, RETIRING, RETIRED, or DECOMMISSIONED.",
+              "severity": "error"
+            },
+            {
+              "dimension": "validity",
+              "rule": "Must not be later than actual_retirement_date when that date is present.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "planned_retirement_date",
+          "description": "Current planned date for retiring the application.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be later than production_date when both dates are present.",
+              "severity": "error"
+            },
+            {
+              "dimension": "timeliness",
+              "rule": "Required for RETIRING applications.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "actual_retirement_date",
+          "description": "Date on which the application stopped providing production service.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when lifecycle_status is RETIRED or DECOMMISSIONED.",
+              "severity": "error"
+            },
+            {
+              "dimension": "validity",
+              "rule": "Must not be earlier than production_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "target_disposition",
+          "description": "Approved or proposed portfolio treatment for the application.",
+          "data_type": "enum",
+          "required": false,
+          "nullable": true,
+          "enum_values": [
+            "INVEST",
+            "MODERNIZE",
+            "MAINTAIN",
+            "TOLERATE",
+            "CONSOLIDATE",
+            "REPLACE",
+            "RETIRE"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "When populated, must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "record_status",
+          "description": "Administrative state of the portfolio record.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "ACTIVE",
+            "INACTIVE"
+          ],
+          "default": "ACTIVE",
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "INACTIVE records must not be used for new relationships.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "source_system",
+          "description": "Authoritative source from which the record was loaded or synchronized.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 100,
+          "example": "EA_REPOSITORY",
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the record was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent record update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "table_quality_rules": [
+        {
+          "dimension": "completeness",
+          "rule": "All required attributes must be populated.",
+          "severity": "error"
+        },
+        {
+          "dimension": "uniqueness",
+          "rule": "application_id and normalized application_name must be unique.",
+          "severity": "error"
+        },
+        {
+          "dimension": "timeliness",
+          "rule": "ACTIVE and RETIRING records should be reviewed at least quarterly.",
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "project_initiative",
+      "display_name": "Project / Initiative",
+      "table_type": "entity",
+      "description": "Represents a temporary project, programme, or strategic initiative that creates, changes, migrates, replaces, or retires applications and may establish or use contracts.",
+      "primary_key": [
+        "project_id"
+      ],
+      "alternate_keys": [
+        [
+          "project_name"
+        ]
+      ],
+      "attributes": [
+        {
+          "name": "project_id",
+          "description": "Stable unique identifier for the project or initiative.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "PRJ-000456",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^PRJ-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "project_name",
+          "description": "Official approved name of the project or initiative.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 250,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank or contain only whitespace.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Should be unique after trimming whitespace and ignoring case.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "description": "Summary of the project's purpose, scope, and expected outcomes.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "max_length": 3000,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Required for APPROVED and IN_PROGRESS projects.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "initiative_type",
+          "description": "Classification of the project or initiative.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PROJECT",
+            "PROGRAMME",
+            "STRATEGIC_INITIATIVE",
+            "REGULATORY_INITIATIVE",
+            "TECHNOLOGY_REFRESH",
+            "TRANSFORMATION",
+            "REMEDIATION_INITIATIVE",
+            "OTHER"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "description": "Current delivery status of the project or initiative.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PROPOSED",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "PLANNED",
+            "IN_PROGRESS",
+            "ON_HOLD",
+            "COMPLETED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "IN_PROGRESS requires actual_start_date.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "COMPLETED requires actual_end_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "planned_start_date",
+          "description": "Approved or forecast project start date.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when status is APPROVED, PLANNED, IN_PROGRESS, or COMPLETED.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "planned_end_date",
+          "description": "Approved or forecast project completion date.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be equal to or later than planned_start_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "actual_start_date",
+          "description": "Date on which project delivery actually started.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when status is IN_PROGRESS or COMPLETED.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "actual_end_date",
+          "description": "Date on which the project was formally completed or closed.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when status is COMPLETED.",
+              "severity": "error"
+            },
+            {
+              "dimension": "validity",
+              "rule": "Must be equal to or later than actual_start_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "strategic_priority",
+          "description": "Relative priority assigned by portfolio governance.",
+          "data_type": "enum",
+          "required": false,
+          "nullable": true,
+          "enum_values": [
+            "MANDATORY",
+            "CRITICAL",
+            "HIGH",
+            "MEDIUM",
+            "LOW"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "When populated, must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "approved_budget_amount",
+          "description": "Total approved project budget in the specified currency.",
+          "data_type": "decimal(18,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be greater than or equal to zero.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "currency_code",
+          "description": "ISO 4217 currency code for monetary project attributes.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "min_length": 3,
+          "max_length": 3,
+          "example": "AED",
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when approved_budget_amount is populated.",
+              "severity": "error"
+            },
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 4217 uppercase currency code.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "record_status",
+          "description": "Administrative state of the portfolio record.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "ACTIVE",
+            "INACTIVE"
+          ],
+          "default": "ACTIVE",
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "INACTIVE records must not be used for new relationships.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "source_system",
+          "description": "Authoritative source from which the record was loaded or synchronized.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 100,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the record was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent record update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "table_quality_rules": [
+        {
+          "dimension": "completeness",
+          "rule": "APPROVED, PLANNED, IN_PROGRESS, and COMPLETED projects must have at least one application or contract relationship.",
+          "severity": "warning"
+        },
+        {
+          "dimension": "timeliness",
+          "rule": "IN_PROGRESS projects should be reviewed at least monthly.",
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "contract",
+      "display_name": "Contract",
+      "table_type": "entity",
+      "description": "Represents a legally or commercially binding agreement that licenses, supports, hosts, operates, implements, or otherwise enables one or more applications or projects.",
+      "primary_key": [
+        "contract_id"
+      ],
+      "alternate_keys": [
+        [
+          "contract_number"
+        ]
+      ],
+      "attributes": [
+        {
+          "name": "contract_id",
+          "description": "Stable unique identifier for the contract.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "CTR-000789",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^CTR-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "contract_number",
+          "description": "Official procurement, legal, or ERP contract reference.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 100,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique after trimming whitespace and ignoring case.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "contract_name",
+          "description": "Human-readable title of the contract.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 250,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank or contain only whitespace.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "description": "Summary of the commercial scope and services covered.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "max_length": 3000,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Recommended for ACTIVE contracts.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "contract_type",
+          "description": "Primary commercial classification of the contract.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "SOFTWARE_LICENSE",
+            "SAAS_SUBSCRIPTION",
+            "SUPPORT_AND_MAINTENANCE",
+            "MANAGED_SERVICE",
+            "HOSTING",
+            "CLOUD_SERVICES",
+            "IMPLEMENTATION",
+            "PROFESSIONAL_SERVICES",
+            "APPLICATION_DEVELOPMENT",
+            "OUTSOURCING",
+            "FRAMEWORK_AGREEMENT",
+            "OTHER"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "description": "Current legal or commercial status of the contract.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "DRAFT",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "ACTIVE",
+            "EXPIRING",
+            "EXPIRED",
+            "SUSPENDED",
+            "TERMINATED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "ACTIVE requires start_date and end_date.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "start_date",
+          "description": "Date from which the contract becomes effective.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when status is ACTIVE, EXPIRING, EXPIRED, SUSPENDED, or TERMINATED.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "end_date",
+          "description": "Current contractual expiry or termination date.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be later than start_date.",
+              "severity": "error"
+            },
+            {
+              "dimension": "timeliness",
+              "rule": "ACTIVE contracts with end_date within 180 days should be flagged for renewal review.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "renewal_type",
+          "description": "How the contract may be renewed at the end of its term.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "AUTO_RENEWAL",
+            "MANUAL_RENEWAL",
+            "NON_RENEWABLE",
+            "NOT_APPLICABLE"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "notice_period_days",
+          "description": "Minimum number of calendar days required to prevent renewal or terminate the contract.",
+          "data_type": "integer",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be greater than or equal to zero.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "Required when renewal_type is AUTO_RENEWAL or MANUAL_RENEWAL.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "total_contract_value",
+          "description": "Total committed contract value for the current contractual term.",
+          "data_type": "decimal(18,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be greater than or equal to zero.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "currency_code",
+          "description": "ISO 4217 currency code for monetary contract attributes.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "min_length": 3,
+          "max_length": 3,
+          "example": "AED",
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when total_contract_value is populated.",
+              "severity": "error"
+            },
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 4217 uppercase currency code.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "support_level",
+          "description": "Highest support coverage committed under the contract.",
+          "data_type": "enum",
+          "required": false,
+          "nullable": true,
+          "enum_values": [
+            "BUSINESS_HOURS",
+            "EXTENDED_HOURS",
+            "TWENTY_FOUR_SEVEN",
+            "BEST_EFFORT",
+            "NOT_APPLICABLE"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Recommended for support, maintenance, managed service, hosting, cloud, and outsourcing contracts.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "record_status",
+          "description": "Administrative state of the portfolio record.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "ACTIVE",
+            "INACTIVE"
+          ],
+          "default": "ACTIVE",
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "INACTIVE records must not be used for new relationships.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "source_system",
+          "description": "Authoritative source from which the record was loaded or synchronized.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "max_length": 100,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Must not be blank.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the record was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent record update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "table_quality_rules": [
+        {
+          "dimension": "referential_integrity",
+          "rule": "ACTIVE contracts should cover at least one application or be linked to at least one active project.",
+          "severity": "warning"
+        },
+        {
+          "dimension": "timeliness",
+          "rule": "ACTIVE contracts should be reviewed at least quarterly and before the notice deadline.",
+          "severity": "warning"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "project_application",
+      "display_name": "Project / Initiative to Application",
+      "table_type": "relationship",
+      "description": "Records how a project or initiative creates, implements, enhances, upgrades, migrates, integrates, replaces, consolidates, retires, or otherwise impacts an application.",
+      "source_table": "project_initiative",
+      "target_table": "application",
+      "cardinality": {
+        "source_to_target": "many-to-many",
+        "source_min": 0,
+        "source_max": "many",
+        "target_min": 0,
+        "target_max": "many",
+        "description": "A project may affect zero or many applications, and an application may be affected by zero or many projects over its lifecycle."
+      },
+      "keys": {
+        "primary_key": [
+          "project_application_id"
+        ],
+        "foreign_keys": [
+          {
+            "columns": [
+              "project_id"
+            ],
+            "references": {
+              "table": "project_initiative",
+              "columns": [
+                "project_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          },
+          {
+            "columns": [
+              "application_id"
+            ],
+            "references": {
+              "table": "application",
+              "columns": [
+                "application_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          }
+        ],
+        "unique_constraints": [
+          [
+            "project_id",
+            "application_id",
+            "relationship_type"
+          ]
+        ]
+      },
+      "relationship_types": [
+        {
+          "code": "CREATES",
+          "label": "Creates",
+          "description": "The project results in a new application portfolio record and production capability."
+        },
+        {
+          "code": "IMPLEMENTS",
+          "label": "Implements",
+          "description": "The project deploys or introduces an application that may already exist as a product or planned record."
+        },
+        {
+          "code": "ENHANCES",
+          "label": "Enhances",
+          "description": "The project adds or improves application functionality without fundamentally replacing the application."
+        },
+        {
+          "code": "UPGRADES",
+          "label": "Upgrades",
+          "description": "The project moves the application or a major component to a newer version or release."
+        },
+        {
+          "code": "MIGRATES",
+          "label": "Migrates",
+          "description": "The project moves the application, workload, data, or hosting arrangement to a new platform or environment."
+        },
+        {
+          "code": "INTEGRATES",
+          "label": "Integrates",
+          "description": "The project creates or materially changes integration involving the application."
+        },
+        {
+          "code": "REPLACES",
+          "label": "Replaces",
+          "description": "The project introduces a successor and removes or plans to remove the application's business role."
+        },
+        {
+          "code": "CONSOLIDATES",
+          "label": "Consolidates",
+          "description": "The project combines functionality or usage from multiple applications into a smaller target set."
+        },
+        {
+          "code": "RETIRES",
+          "label": "Retires",
+          "description": "The project decommissions or removes the application from production use."
+        },
+        {
+          "code": "IMPACTS",
+          "label": "Impacts",
+          "description": "The project affects the application, but a more specific relationship type is not yet known."
+        }
+      ],
+      "attributes": [
+        {
+          "name": "project_application_id",
+          "description": "Unique identifier for the relationship record.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "PRA-000001",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^PRA-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "project_id",
+          "description": "Identifier of the related project or initiative.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing project_initiative.project_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "application_id",
+          "description": "Identifier of the affected application.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing application.application_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "relationship_type",
+          "description": "Nature of the project's impact on the application.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "CREATES",
+            "IMPLEMENTS",
+            "ENHANCES",
+            "UPGRADES",
+            "MIGRATES",
+            "INTEGRATES",
+            "REPLACES",
+            "CONSOLIDATES",
+            "RETIRES",
+            "IMPACTS"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined relationship type.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "impact_description",
+          "description": "Project-specific explanation of the expected or actual impact on the application.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "max_length": 2000,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Required when relationship_type is IMPACTS.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "planned_effective_date",
+          "description": "Planned date on which the relationship outcome becomes effective.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Should fall within the project's planned or actual date range.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "actual_effective_date",
+          "description": "Actual date on which the relationship outcome became effective.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when relationship_status is COMPLETED.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "relationship_status",
+          "description": "Delivery status of this specific project-to-application impact.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PLANNED",
+            "ACTIVE",
+            "COMPLETED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "is_primary_change",
+          "description": "Indicates whether the application is a primary project scope item rather than a secondary dependency.",
+          "data_type": "boolean",
+          "required": true,
+          "nullable": false,
+          "default": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be true or false.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the relationship was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent relationship update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "relationship_quality_rules": [
+        {
+          "dimension": "uniqueness",
+          "rule": "The combination of project_id, application_id, and relationship_type must be unique.",
+          "severity": "error"
+        },
+        {
+          "dimension": "consistency",
+          "rule": "RETIRES should normally target an ACTIVE, RESTRICTED, or RETIRING application.",
+          "severity": "warning"
+        },
+        {
+          "dimension": "consistency",
+          "rule": "CREATES or IMPLEMENTS should normally target a PROPOSED, PLANNED, or IN_DEVELOPMENT application.",
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "application_contract",
+      "display_name": "Application to Contract",
+      "table_type": "relationship",
+      "description": "Records the direct and continuing commercial dependency between an application and a contract, independently of any project that originally established the contract.",
+      "source_table": "application",
+      "target_table": "contract",
+      "cardinality": {
+        "source_to_target": "many-to-many",
+        "source_min": 0,
+        "source_max": "many",
+        "target_min": 0,
+        "target_max": "many",
+        "description": "An application may be covered by zero or many contracts, and a contract may cover zero or many applications."
+      },
+      "keys": {
+        "primary_key": [
+          "application_contract_id"
+        ],
+        "foreign_keys": [
+          {
+            "columns": [
+              "application_id"
+            ],
+            "references": {
+              "table": "application",
+              "columns": [
+                "application_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          },
+          {
+            "columns": [
+              "contract_id"
+            ],
+            "references": {
+              "table": "contract",
+              "columns": [
+                "contract_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          }
+        ],
+        "unique_constraints": [
+          [
+            "application_id",
+            "contract_id",
+            "relationship_type",
+            "coverage_start_date"
+          ]
+        ]
+      },
+      "relationship_types": [
+        {
+          "code": "LICENSES",
+          "label": "Licenses",
+          "description": "The contract provides software, subscription, or usage rights required by the application."
+        },
+        {
+          "code": "SUPPORTS",
+          "label": "Supports",
+          "description": "The contract provides technical or functional support for the application."
+        },
+        {
+          "code": "MAINTAINS",
+          "label": "Maintains",
+          "description": "The contract provides corrective, preventive, adaptive, or enhancement maintenance."
+        },
+        {
+          "code": "HOSTS",
+          "label": "Hosts",
+          "description": "The contract provides infrastructure or a hosting environment for the application."
+        },
+        {
+          "code": "OPERATES",
+          "label": "Operates",
+          "description": "The contract provides day-to-day operational responsibility for the application."
+        },
+        {
+          "code": "IMPLEMENTS",
+          "label": "Implements",
+          "description": "The contract provides implementation or deployment services for the application."
+        },
+        {
+          "code": "DEVELOPS",
+          "label": "Develops",
+          "description": "The contract provides custom software development for the application."
+        },
+        {
+          "code": "PROVIDES_CLOUD_SERVICES",
+          "label": "Provides Cloud Services",
+          "description": "The contract provides cloud platform, infrastructure, or consumption services used by the application."
+        },
+        {
+          "code": "PROVIDES_MANAGED_SERVICE",
+          "label": "Provides Managed Service",
+          "description": "The contract provides an integrated managed service covering defined application responsibilities."
+        },
+        {
+          "code": "COVERS",
+          "label": "Covers",
+          "description": "The contract covers the application, but a more specific commercial relationship is not yet known."
+        }
+      ],
+      "attributes": [
+        {
+          "name": "application_contract_id",
+          "description": "Unique identifier for the relationship record.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "APC-000001",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^APC-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "application_id",
+          "description": "Identifier of the application covered by the contract.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing application.application_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "contract_id",
+          "description": "Identifier of the contract covering the application.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing contract.contract_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "relationship_type",
+          "description": "Nature of the commercial coverage or service provided to the application.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "LICENSES",
+            "SUPPORTS",
+            "MAINTAINS",
+            "HOSTS",
+            "OPERATES",
+            "IMPLEMENTS",
+            "DEVELOPS",
+            "PROVIDES_CLOUD_SERVICES",
+            "PROVIDES_MANAGED_SERVICE",
+            "COVERS"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined relationship type.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "coverage_start_date",
+          "description": "Date from which this contract begins covering the application.",
+          "data_type": "date",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must not be earlier than contract.start_date when contract.start_date is present.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "coverage_end_date",
+          "description": "Date on which this contract stops covering the application.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be later than coverage_start_date.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "Must not be later than contract.end_date unless an approved extension exists.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "application_cost_allocation",
+          "description": "Amount of the contract value allocated to this application for the coverage period.",
+          "data_type": "decimal(18,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be greater than or equal to zero.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "allocation_percentage",
+          "description": "Percentage of the relevant contract value allocated to this application.",
+          "data_type": "decimal(5,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be between 0 and 100 inclusive.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "For overlapping coverage periods, allocation percentages across applications for the same contract should not exceed 100.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "currency_code",
+          "description": "ISO 4217 currency code for application_cost_allocation.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "min_length": 3,
+          "max_length": 3,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when application_cost_allocation is populated.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "is_primary_contract",
+          "description": "Indicates that this is the primary contract for the specified coverage type.",
+          "data_type": "boolean",
+          "required": true,
+          "nullable": false,
+          "default": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Only one active primary contract is allowed per application and relationship_type for overlapping dates.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "is_critical_dependency",
+          "description": "Indicates that expiry, termination, or failure of the contract would materially disrupt the application.",
+          "data_type": "boolean",
+          "required": true,
+          "nullable": false,
+          "default": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be true or false.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "relationship_status",
+          "description": "Current administrative status of the application-to-contract coverage.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PLANNED",
+            "ACTIVE",
+            "EXPIRED",
+            "TERMINATED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "ACTIVE requires an ACTIVE or EXPIRING contract.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the relationship was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent relationship update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "relationship_quality_rules": [
+        {
+          "dimension": "uniqueness",
+          "rule": "The configured unique key must not be duplicated.",
+          "severity": "error"
+        },
+        {
+          "dimension": "consistency",
+          "rule": "ACTIVE application-contract coverage must fall within the effective contract term.",
+          "severity": "error"
+        },
+        {
+          "dimension": "timeliness",
+          "rule": "Critical application-contract relationships should be reviewed before the contract notice deadline.",
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "project_contract",
+      "display_name": "Project / Initiative to Contract",
+      "table_type": "relationship",
+      "description": "Records how a project or initiative procures, establishes, uses, extends, renews, amends, replaces, terminates, or consumes services from a contract.",
+      "source_table": "project_initiative",
+      "target_table": "contract",
+      "cardinality": {
+        "source_to_target": "many-to-many",
+        "source_min": 0,
+        "source_max": "many",
+        "target_min": 0,
+        "target_max": "many",
+        "description": "A project may involve zero or many contracts, and a contract may support zero or many projects."
+      },
+      "keys": {
+        "primary_key": [
+          "project_contract_id"
+        ],
+        "foreign_keys": [
+          {
+            "columns": [
+              "project_id"
+            ],
+            "references": {
+              "table": "project_initiative",
+              "columns": [
+                "project_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          },
+          {
+            "columns": [
+              "contract_id"
+            ],
+            "references": {
+              "table": "contract",
+              "columns": [
+                "contract_id"
+              ]
+            },
+            "on_delete": "RESTRICT",
+            "on_update": "CASCADE"
+          }
+        ],
+        "unique_constraints": [
+          [
+            "project_id",
+            "contract_id",
+            "relationship_type"
+          ]
+        ]
+      },
+      "relationship_types": [
+        {
+          "code": "PROCURES",
+          "label": "Procures",
+          "description": "The project leads the sourcing and procurement of the contract."
+        },
+        {
+          "code": "ESTABLISHES",
+          "label": "Establishes",
+          "description": "The contract is created or first activated as a direct outcome of the project."
+        },
+        {
+          "code": "USES",
+          "label": "Uses",
+          "description": "The project consumes services or commercial rights from an existing contract."
+        },
+        {
+          "code": "EXTENDS",
+          "label": "Extends",
+          "description": "The project expands the contract's term, value, scope, or covered services."
+        },
+        {
+          "code": "RENEWS",
+          "label": "Renews",
+          "description": "The project results in renewal of the contract for a new contractual term."
+        },
+        {
+          "code": "AMENDS",
+          "label": "Amends",
+          "description": "The project changes contractual clauses, deliverables, value, or obligations."
+        },
+        {
+          "code": "REPLACES",
+          "label": "Replaces",
+          "description": "The project introduces a successor contract that supersedes this contract."
+        },
+        {
+          "code": "TERMINATES",
+          "label": "Terminates",
+          "description": "The project causes the contract to end before or at its planned expiry."
+        },
+        {
+          "code": "CONSUMES_FROM_FRAMEWORK",
+          "label": "Consumes From Framework",
+          "description": "The project places work, orders, or spend under an existing framework agreement."
+        }
+      ],
+      "attributes": [
+        {
+          "name": "project_contract_id",
+          "description": "Unique identifier for the relationship record.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "example": "PRC-000001",
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must match the pattern ^PRC-[0-9]{6}$.",
+              "severity": "error"
+            },
+            {
+              "dimension": "uniqueness",
+              "rule": "Must be unique and must never be reused.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "project_id",
+          "description": "Identifier of the related project or initiative.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing project_initiative.project_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "contract_id",
+          "description": "Identifier of the related contract.",
+          "data_type": "string",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "referential_integrity",
+              "rule": "Must reference an existing contract.contract_id.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "relationship_type",
+          "description": "Nature of the project's commercial relationship with the contract.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PROCURES",
+            "ESTABLISHES",
+            "USES",
+            "EXTENDS",
+            "RENEWS",
+            "AMENDS",
+            "REPLACES",
+            "TERMINATES",
+            "CONSUMES_FROM_FRAMEWORK"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined relationship type.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "project_scope_description",
+          "description": "Explanation of the contract scope, deliverables, or services used by the project.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "max_length": 2000,
+          "quality_rules": [
+            {
+              "dimension": "completeness",
+              "rule": "Recommended when the contract also covers other projects or operational services.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "project_cost_allocation",
+          "description": "Amount of contract value allocated to this project.",
+          "data_type": "decimal(18,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be greater than or equal to zero.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "allocation_percentage",
+          "description": "Percentage of relevant contract value allocated to this project.",
+          "data_type": "decimal(5,2)",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be between 0 and 100 inclusive.",
+              "severity": "error"
+            },
+            {
+              "dimension": "consistency",
+              "rule": "Allocation percentages across projects for the same contract and period should not exceed 100.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "currency_code",
+          "description": "ISO 4217 currency code for project_cost_allocation.",
+          "data_type": "string",
+          "required": false,
+          "nullable": true,
+          "min_length": 3,
+          "max_length": 3,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Required when project_cost_allocation is populated.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "effective_date",
+          "description": "Date on which this project-to-contract relationship becomes effective.",
+          "data_type": "date",
+          "required": false,
+          "nullable": true,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Should fall within the project's and contract's effective date ranges.",
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "name": "relationship_status",
+          "description": "Current administrative status of the project-to-contract relationship.",
+          "data_type": "enum",
+          "required": true,
+          "nullable": false,
+          "enum_values": [
+            "PLANNED",
+            "ACTIVE",
+            "COMPLETED",
+            "CANCELLED"
+          ],
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must contain exactly one defined enum value.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "description": "UTC timestamp when the relationship was created.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "validity",
+              "rule": "Must be a valid ISO 8601 UTC datetime.",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "name": "updated_at",
+          "description": "UTC timestamp of the most recent relationship update.",
+          "data_type": "datetime",
+          "required": true,
+          "nullable": false,
+          "quality_rules": [
+            {
+              "dimension": "consistency",
+              "rule": "Must be equal to or later than created_at.",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "relationship_quality_rules": [
+        {
+          "dimension": "uniqueness",
+          "rule": "The combination of project_id, contract_id, and relationship_type must be unique.",
+          "severity": "error"
+        },
+        {
+          "dimension": "consistency",
+          "rule": "ESTABLISHES or PROCURES should normally relate to a DRAFT, UNDER_REVIEW, APPROVED, or ACTIVE contract.",
+          "severity": "warning"
+        },
+        {
+          "dimension": "consistency",
+          "rule": "TERMINATES should normally relate to an ACTIVE, EXPIRING, or SUSPENDED contract.",
+          "severity": "warning"
+        }
+      ]
+    }
+  ],
+  "cross_entity_rules": [
+    {
+      "rule_id": "CER-001",
+      "description": "A project that ESTABLISHES or PROCURES a contract for an application should normally have both a project_contract relationship and a project_application relationship.",
+      "severity": "warning"
+    },
+    {
+      "rule_id": "CER-002",
+      "description": "A direct application_contract relationship must be maintained even when the contract was originally established through a project, because the commercial dependency may continue after the project closes.",
+      "severity": "error"
+    },
+    {
+      "rule_id": "CER-003",
+      "description": "When a project REPLACES an application, the project should normally also CREATE or IMPLEMENT at least one successor application.",
+      "severity": "warning"
+    },
+    {
+      "rule_id": "CER-004",
+      "description": "When a project RETIRES an application, all active application_contract relationships should be reviewed for termination, reassignment, or continued residual obligations.",
+      "severity": "warning"
+    },
+    {
+      "rule_id": "CER-005",
+      "description": "An ACTIVE critical application with no active application_contract relationship should be reviewed to confirm whether it is internally developed and fully supported without external commercial dependency.",
+      "severity": "warning"
+    }
+  ]
+}
